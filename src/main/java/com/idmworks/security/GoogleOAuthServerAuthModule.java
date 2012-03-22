@@ -104,7 +104,9 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         final AccessTokenInfo accessTokenInfo = lookupAccessTokeInfo(redirectUri, authorizationCode);
         LOGGER.log(Level.SEVERE, "Access Token: {0}", new Object[]{accessTokenInfo});
 
-        setCallerPrincipal(clientSubject, "test-user@idmworks.com");
+        final GoogleUserInfo googleUserInfo = retrieveGoogleUserInfo(accessTokenInfo);
+
+        setCallerPrincipal(clientSubject, googleUserInfo);
         return AuthStatus.SUCCESS;
       }
     } else {
@@ -155,6 +157,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   }
 
   AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode) {
+    //FIXME don't duplicate code
     HttpsURLConnection httpsURLConnection;
 
     try {
@@ -199,6 +202,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         while ((line = reader.readLine()) != null) {
           stringBuilder.append(line).append("\n");
         }
+        reader.close();
         return parseAccessTokenJson(stringBuilder.toString());
       } else {
         return null;//FIXME handle this better
@@ -209,15 +213,53 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   }
 
-  static AccessTokenInfo parseAccessTokenJson(final String json) {
+  GoogleUserInfo retrieveGoogleUserInfo(AccessTokenInfo accessTokenInfo) {
+    //FIXME don't duplicate code
+    HttpsURLConnection httpsURLConnection;
 
+    try {
+      final URL url = new URL("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + accessTokenInfo.getAccessToken());
+      httpsURLConnection = (HttpsURLConnection) url.openConnection();
+      httpsURLConnection.setRequestMethod("GET");
+      httpsURLConnection.setDoOutput(false);
+      httpsURLConnection.connect();
+    } catch (IOException ex) {
+      throw new IllegalStateException("Unable to connect to google api", ex);
+    }
+
+    try {
+      LOGGER.severe("response code: " + httpsURLConnection.getResponseCode());
+      if (httpsURLConnection.getResponseCode() == 200) {
+        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
+        final StringBuilder stringBuilder = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+          stringBuilder.append(line).append("\n");
+        }
+        reader.close();
+        return parseGoogleUserInfoJson(stringBuilder.toString());
+      } else {
+        return null;//FIXME handle this better
+      }
+    } catch (IOException ex) {
+      throw new IllegalStateException("Unable to read response", ex);
+    }
+  }
+
+  static Map<String, String> parseSimpleJson(final String json) {
     final String[] parts = json.substring(json.indexOf("{") + 1, json.lastIndexOf("}")).split(",");
 
     final Map<String, String> values = new HashMap<String, String>();
     for (final String part : parts) {
-      final String[] vparts = part.replaceAll("\"", "").split(":");
+      final String[] vparts = part.replaceAll("\"", "").split(":", 2);
       values.put(vparts[0].trim(), vparts[1].trim());
     }
+    return values;
+  }
+
+  static AccessTokenInfo parseAccessTokenJson(final String json) {
+
+    final Map<String, String> values = parseSimpleJson(json);
 
     final String accessToken = values.get("access_token");
     final String expiresInAsString = values.get("expires_in");
@@ -228,9 +270,27 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     return new AccessTokenInfo(accessToken, new Date(new Date().getTime() + expiresIn * 1000), tokenType);
   }
 
-  boolean setCallerPrincipal(Subject clientSubject, String email) {
+  static GoogleUserInfo parseGoogleUserInfoJson(final String json) {
+
+    final Map<String, String> values = parseSimpleJson(json);
+
+    final String id = values.get("id");
+    final String email = values.get("email");
+    final boolean verifiedEmail = values.containsKey("verified_email") && Boolean.parseBoolean(values.get("verified_email"));
+    final String name = values.get("name");
+    final String givenName = values.get("given_name");
+    final String familyName = values.get("family_name");
+    final String gender = values.get("gender");
+    final String link = values.get("link");
+    final String picture = values.get("picture");
+    final String locale = values.get("locale");
+
+    return new GoogleUserInfo(id, email, verifiedEmail, name, givenName, familyName, gender, link, picture, locale);
+  }
+
+  boolean setCallerPrincipal(Subject clientSubject, GoogleUserInfo googleUserInfo) {
     final CallerPrincipalCallback principalCallback = new CallerPrincipalCallback(
-            clientSubject, new GoogleOAuthPrincipal(email));
+            clientSubject, new GoogleOAuthPrincipal(googleUserInfo));
     final GroupPrincipalCallback groupCallback = new GroupPrincipalCallback(clientSubject, new String[]{"user"});
     try {
       handler.handle(new Callback[]{principalCallback, groupCallback});

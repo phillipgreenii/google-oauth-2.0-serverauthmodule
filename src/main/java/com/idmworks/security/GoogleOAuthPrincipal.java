@@ -9,18 +9,18 @@ import java.security.Principal;
  */
 public class GoogleOAuthPrincipal implements Principal {
 
-  private final String email;
+  private final GoogleUserInfo googleUserInfo;
 
-  public GoogleOAuthPrincipal(String email) {
-    this.email = email;
+  public GoogleOAuthPrincipal(GoogleUserInfo googleUserInfo) {
+    this.googleUserInfo = googleUserInfo;
   }
 
   @Override
   public String getName() {
-    return email;
+    return googleUserInfo.getEmail();
   }
 
-  public String getEmail() {
-    return email;
+  public GoogleUserInfo getGoogleUserInfo() {
+    return googleUserInfo;
   }
 }
