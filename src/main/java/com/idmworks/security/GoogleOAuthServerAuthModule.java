@@ -47,7 +47,6 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private MessagePolicy responsePolicy;
   private CallbackHandler handler;
   private Map<String, String> options;
-  private boolean mandatory;
   //properties
   private String endpoint;
   private String clientid;
@@ -68,7 +67,6 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     this.responsePolicy = responsePolicy;
     this.handler = handler;
     this.options = options;
-    this.mandatory = requestPolicy.isMandatory();
     //properties
     this.endpoint = retrieveProperty(options, ENDPOINT_PROPERTY_NAME, DEFAULT_ENDPOINT);
     this.clientid = retrieveProperty(options, CLIENTID_PROPERTY_NAME, null);
@@ -90,6 +88,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   @Override
   public AuthStatus validateRequest(MessageInfo messageInfo, Subject clientSubject, Subject serviceSubject) throws AuthException {
 
+
     final HttpServletRequest request = (HttpServletRequest) messageInfo.getRequestMessage();
     final HttpServletResponse response = (HttpServletResponse) messageInfo.getResponseMessage();
 
@@ -109,6 +108,8 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         setCallerPrincipal(clientSubject, googleUserInfo);
         return AuthStatus.SUCCESS;
       }
+    } else if (isMandatory(messageInfo)) {
+      return AuthStatus.SUCCESS;
     } else {
       final String redirectUri = buildRedirectUri(request);
       final String oauthUrl = buildOauthUrl(redirectUri);
@@ -300,6 +301,11 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
 
     return true;
+  }
+
+  static boolean isMandatory(MessageInfo messageInfo) {
+    return Boolean.valueOf((String) messageInfo.getMap().get(
+            "javax.security.auth.message.MessagePolicy.isMandatory"));//FIXME don't hardcode string
   }
 
   @Override
