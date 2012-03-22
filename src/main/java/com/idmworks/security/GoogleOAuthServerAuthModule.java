@@ -1,5 +1,6 @@
 package com.idmworks.security;
 
+import com.idmworks.security.google.ParseUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -7,8 +8,6 @@ import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -201,7 +200,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
           stringBuilder.append(line).append("\n");
         }
         reader.close();
-        return parseAccessTokenJson(stringBuilder.toString());
+        return ParseUtils.parseAccessTokenJson(stringBuilder.toString());
       } else {
         return null;//FIXME handle this better
       }
@@ -235,55 +234,13 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
           stringBuilder.append(line).append("\n");
         }
         reader.close();
-        return parseGoogleUserInfoJson(stringBuilder.toString());
+        return ParseUtils.parseGoogleUserInfoJson(stringBuilder.toString());
       } else {
         return null;//FIXME handle this better
       }
     } catch (IOException ex) {
       throw new IllegalStateException("Unable to read response", ex);
     }
-  }
-
-  static Map<String, String> parseSimpleJson(final String json) {
-    final String[] parts = json.substring(json.indexOf("{") + 1, json.lastIndexOf("}")).split(",");
-
-    final Map<String, String> values = new HashMap<String, String>();
-    for (final String part : parts) {
-      final String[] vparts = part.replaceAll("\"", "").split(":", 2);
-      values.put(vparts[0].trim(), vparts[1].trim());
-    }
-    return values;
-  }
-
-  static AccessTokenInfo parseAccessTokenJson(final String json) {
-
-    final Map<String, String> values = parseSimpleJson(json);
-
-    final String accessToken = values.get("access_token");
-    final String expiresInAsString = values.get("expires_in");
-    final String tokenType = values.get("token_type");
-
-    final int expiresIn = Integer.parseInt(expiresInAsString);
-
-    return new AccessTokenInfo(accessToken, new Date(new Date().getTime() + expiresIn * 1000), tokenType);
-  }
-
-  static GoogleUserInfo parseGoogleUserInfoJson(final String json) {
-
-    final Map<String, String> values = parseSimpleJson(json);
-
-    final String id = values.get("id");
-    final String email = values.get("email");
-    final boolean verifiedEmail = values.containsKey("verified_email") && Boolean.parseBoolean(values.get("verified_email"));
-    final String name = values.get("name");
-    final String givenName = values.get("given_name");
-    final String familyName = values.get("family_name");
-    final String gender = values.get("gender");
-    final String link = values.get("link");
-    final String picture = values.get("picture");
-    final String locale = values.get("locale");
-
-    return new GoogleUserInfo(id, email, verifiedEmail, name, givenName, familyName, gender, link, picture, locale);
   }
 
   boolean setCallerPrincipal(Subject clientSubject, GoogleUserInfo googleUserInfo) {

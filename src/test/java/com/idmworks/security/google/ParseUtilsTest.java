@@ -1,15 +1,17 @@
-package com.idmworks.security;
+package com.idmworks.security.google;
 
+import com.idmworks.security.AccessTokenInfo;
+import com.idmworks.security.GoogleUserInfo;
 import org.junit.*;
 import static org.junit.Assert.*;
 import static org.hamcrest.CoreMatchers.*;
 
 /**
- * Tests for {@link GoogleOAuthServerAuthModule}.
+ * Tests for {@link ParseUtils}.
  *
  * @author pdgreen
  */
-public class GoogleOAuthServerAuthModuleTest {
+public class ParseUtilsTest {
 
   @Test
   public void testParseAccessTokenJson() {
@@ -20,7 +22,7 @@ public class GoogleOAuthServerAuthModuleTest {
             + "\"token_type\":\"Bearer\"\n"
             + "}";
 
-    final AccessTokenInfo result = GoogleOAuthServerAuthModule.parseAccessTokenJson(json);
+    final AccessTokenInfo result = ParseUtils.parseAccessTokenJson(json);
 
     assertThat(result, is(notNullValue()));
     assertThat(result.getAccessToken(), is("1/fFAGRNJru1FTz70BzhT3Zg"));
@@ -43,7 +45,7 @@ public class GoogleOAuthServerAuthModuleTest {
             + "\"locale\": \"en-US\"\n"
             + "}";
 
-    final GoogleUserInfo result = GoogleOAuthServerAuthModule.parseGoogleUserInfoJson(json);
+    final GoogleUserInfo result = ParseUtils.parseGoogleUserInfoJson(json);
 
     assertThat(result, is(notNullValue()));
     assertThat(result.getId(), is("1074968992519869407200"));
