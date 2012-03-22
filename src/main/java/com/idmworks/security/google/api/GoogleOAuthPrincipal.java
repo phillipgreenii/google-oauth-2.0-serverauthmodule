@@ -1,9 +1,9 @@
-package com.idmworks.security;
+package com.idmworks.security.google.api;
 
 import java.security.Principal;
 
 /**
- * Principal for user authenticated with Google OAuth
+ * Principal for user authenticated with Google OAuth.
  *
  * @author pdgreen
  */

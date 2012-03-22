@@ -1,4 +1,4 @@
-package com.idmworks.security;
+package com.idmworks.security.google.api;
 
 /**
  * User information from google account.
