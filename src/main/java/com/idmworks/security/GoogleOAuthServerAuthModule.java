@@ -105,12 +105,12 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       return AuthStatus.SUCCESS;
     } else {
       final String redirectUri = buildRedirectUri(request);
-      final String oauthUrl = GoogleApiUtils.buildOauthUrl(redirectUri, endpoint, clientid);
+      final URI oauthUri = GoogleApiUtils.buildOauthUri(redirectUri, endpoint, clientid);
       try {
-        LOGGER.log(Level.FINE, "redirecting to {0} for OAuth", new Object[]{oauthUrl});
-        response.sendRedirect(oauthUrl);
+        LOGGER.log(Level.FINE, "redirecting to {0} for OAuth", new Object[]{oauthUri});
+        response.sendRedirect(oauthUri.toString());
       } catch (IOException ex) {
-        throw new IllegalStateException("Unable to redirect to " + oauthUrl, ex);
+        throw new IllegalStateException("Unable to redirect to " + oauthUri, ex);
       }
       return AuthStatus.SEND_CONTINUE;
     }

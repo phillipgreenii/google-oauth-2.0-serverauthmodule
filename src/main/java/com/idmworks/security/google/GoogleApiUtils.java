@@ -6,7 +6,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.HttpsURLConnection;
 
@@ -19,20 +23,28 @@ import javax.net.ssl.HttpsURLConnection;
  */
 public class GoogleApiUtils {
 
+  public static String USERINFO_API_PERMISSION_EMAIL = "https://www.googleapis.com/auth/userinfo.email";
+  public static String USERINFO_API_PERMISSION_PROFILE = "https://www.googleapis.com/auth/userinfo.profile";
+  public static String USERINFO_API_URI = "https://www.googleapis.com/oauth2/v1/userinfo";
+  public static String TOKEN_API_URI = "https://accounts.google.com/o/oauth2/token";
   private static Logger LOGGER = Logger.getLogger(GoogleApiUtils.class.getName());
 
-  public static String buildOauthUrl(final String redirectUri, final String endpoint, final String clientid) {
+  public static URI buildOauthUri(final String redirectUri, final String endpoint, final String clientid) {
 
     final StringBuilder sb = new StringBuilder(endpoint);
     sb.append("?");
-    sb.append("scope").append("=").append("https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile");
+    sb.append("scope").append("=").append(USERINFO_API_PERMISSION_EMAIL).append(" ").append(USERINFO_API_PERMISSION_PROFILE);
     sb.append("&");
     sb.append("redirect_uri").append("=").append(redirectUri);
     sb.append("&");
     sb.append("response_type").append("=").append("code");
     sb.append("&");
     sb.append("client_id").append("=").append(clientid);
-    return sb.toString();
+    try {
+      return new URI(sb.toString());
+    } catch (URISyntaxException ex) {
+      throw new IllegalArgumentException("Unable to build Oauth Uri", ex);
+    }
   }
 
   public static AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode, String clientid, String clientSecret) {
@@ -40,7 +52,7 @@ public class GoogleApiUtils {
     HttpsURLConnection httpsURLConnection;
 
     try {
-      final URL url = new URL("https://accounts.google.com/o/oauth2/token");
+      final URL url = new URL(TOKEN_API_URI);
       httpsURLConnection = (HttpsURLConnection) url.openConnection();
       httpsURLConnection.setRequestMethod("POST");
       httpsURLConnection.setDoOutput(true);
@@ -97,7 +109,7 @@ public class GoogleApiUtils {
     HttpsURLConnection httpsURLConnection;
 
     try {
-      final URL url = new URL("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + accessTokenInfo.getAccessToken());
+      final URL url = new URL(USERINFO_API_URI + "?access_token=" + accessTokenInfo.getAccessToken());
       httpsURLConnection = (HttpsURLConnection) url.openConnection();
       httpsURLConnection.setRequestMethod("GET");
       httpsURLConnection.setDoOutput(false);
