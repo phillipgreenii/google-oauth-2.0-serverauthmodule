@@ -81,13 +81,20 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     final HttpServletResponse response = (HttpServletResponse) messageInfo.getResponseMessage();
 
     if (isOauthResponse(request)) {
-      setCallerPrincipal(clientSubject, "test-user@idmworks.com");
-      return AuthStatus.SUCCESS;
+      final String authorizationCode = request.getParameter("code");//FIXME don't hardcode parameter name
+      final String error = request.getParameter("error");//FIXME don't hardcode parameter name
+      if (error != null && !error.isEmpty()) {
+        LOGGER.log(Level.WARNING, "Error authorizing: {0}", new Object[]{error});
+        return AuthStatus.FAILURE;
+      } else {
+        setCallerPrincipal(clientSubject, "test-user@idmworks.com");
+        return AuthStatus.SUCCESS;
+      }
     } else {
       final String redirectUri = buildRedirectUri(request);
       final String oauthUrl = buildOauthUrl(redirectUri);
       try {
-        LOGGER.log(Level.FINE, "redirecting to {} for OAuth", new Object[]{oauthUrl});
+        LOGGER.log(Level.FINE, "redirecting to {0} for OAuth", new Object[]{oauthUrl});
         response.sendRedirect(oauthUrl);
       } catch (IOException ex) {
         throw new IllegalStateException("Unable to redirect to " + oauthUrl, ex);
