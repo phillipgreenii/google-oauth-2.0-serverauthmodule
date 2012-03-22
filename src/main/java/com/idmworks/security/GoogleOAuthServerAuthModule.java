@@ -1,11 +1,18 @@
 package com.idmworks.security;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.net.ssl.HttpsURLConnection;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -30,6 +37,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   public static final String DEFAULT_OAUTH_AUTHETICATION_REDIRECT = "/j_oauth_check";
   private static final String ENDPOINT_PROPERTY_NAME = "oauth.endpoint";
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
+  private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
   private static final String REDIRECTURI_PROPERTY_NAME = "oauth.redirect_uri";
   private static Logger LOGGER = Logger.getLogger(GoogleOAuthServerAuthModule.class.getName());
   protected static final Class[] SUPPORTED_MESSAGE_TYPES = new Class[]{
@@ -43,6 +51,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   //properties
   private String endpoint;
   private String clientid;
+  private String clientSecret;
   private String oauthAuthenticationRedirect;
 
   String retrieveProperty(final Map<String, String> properties, final String name, final String defaultValue) {
@@ -63,9 +72,13 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     //properties
     this.endpoint = retrieveProperty(options, ENDPOINT_PROPERTY_NAME, DEFAULT_ENDPOINT);
     this.clientid = retrieveProperty(options, CLIENTID_PROPERTY_NAME, null);
+    this.clientSecret = retrieveProperty(options, CLIENTSECRET_PROPERTY_NAME, null);
     this.oauthAuthenticationRedirect = retrieveProperty(options, REDIRECTURI_PROPERTY_NAME, DEFAULT_OAUTH_AUTHETICATION_REDIRECT);
     if (this.clientid == null) {
       throw new AuthException("Required field \"" + CLIENTID_PROPERTY_NAME + "\" not specified!");
+    }
+    if (this.clientSecret == null) {
+      throw new AuthException("Required field \"" + CLIENTSECRET_PROPERTY_NAME + "\" not specified!");
     }
   }
 
@@ -87,6 +100,10 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         LOGGER.log(Level.WARNING, "Error authorizing: {0}", new Object[]{error});
         return AuthStatus.FAILURE;
       } else {
+        final String redirectUri = buildRedirectUri(request);
+        final AccessTokenInfo accessTokenInfo = lookupAccessTokeInfo(redirectUri, authorizationCode);
+        LOGGER.log(Level.SEVERE, "Access Token: {0}", new Object[]{accessTokenInfo});
+
         setCallerPrincipal(clientSubject, "test-user@idmworks.com");
         return AuthStatus.SUCCESS;
       }
@@ -135,6 +152,80 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     sb.append("&");
     sb.append("client_id").append("=").append(clientid);
     return sb.toString();
+  }
+
+  AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode) {
+    HttpsURLConnection httpsURLConnection;
+
+    try {
+      final URL url = new URL("https://accounts.google.com/o/oauth2/token");
+      httpsURLConnection = (HttpsURLConnection) url.openConnection();
+      httpsURLConnection.setRequestMethod("POST");
+      httpsURLConnection.setDoOutput(true);
+      httpsURLConnection.connect();
+    } catch (IOException ex) {
+      throw new IllegalStateException("Unable to connect to google api", ex);
+    }
+
+    try {
+      final OutputStreamWriter out = new OutputStreamWriter(
+              httpsURLConnection.getOutputStream());
+
+      final StringBuilder sb = new StringBuilder();
+
+      sb.append("code").append("=").append(authorizationCode);
+      sb.append("&");
+      sb.append("client_id").append("=").append(clientid);
+      sb.append("&");
+      sb.append("client_secret").append("=").append(clientSecret);
+      sb.append("&");
+      sb.append("redirect_uri").append("=").append(redirectUri);
+      sb.append("&");
+      sb.append("grant_type").append("=").append("authorization_code");
+      LOGGER.severe(sb.toString());
+      out.write(sb.toString());
+      out.flush();
+      out.close();
+    } catch (IOException ex) {
+      throw new IllegalStateException("Unable to POST body", ex);
+    }
+
+    try {
+      LOGGER.severe("response code: " + httpsURLConnection.getResponseCode());
+      if (httpsURLConnection.getResponseCode() == 200) {
+        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
+        final StringBuilder stringBuilder = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+          stringBuilder.append(line).append("\n");
+        }
+        return parseAccessTokenJson(stringBuilder.toString());
+      } else {
+        return null;//FIXME handle this better
+      }
+    } catch (IOException ex) {
+      throw new IllegalStateException("Unable to read response", ex);
+    }
+
+  }
+
+  static AccessTokenInfo parseAccessTokenJson(final String json) {
+
+    final String[] parts = json.substring(json.indexOf("{") + 1, json.lastIndexOf("}")).split(",");
+
+    final Map<String, String> values = new HashMap<String, String>();
+    for (final String part : parts) {
+      final String[] vparts = part.replaceAll("\"", "").split(":");
+      values.put(vparts[0].trim(), vparts[1].trim());
+    }
+
+    final String accessToken = values.get("access_token");
+    final String expiresInAsString = values.get("expires_in");
+    final String tokenType = values.get("token_type");
+
+    final int expiresIn = Integer.parseInt(expiresInAsString);
+
+    return new AccessTokenInfo(accessToken, new Date(new Date().getTime() + expiresIn * 1000), tokenType);
   }
 
   boolean setCallerPrincipal(Subject clientSubject, String email) {
