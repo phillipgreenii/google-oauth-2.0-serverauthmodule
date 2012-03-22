@@ -34,26 +34,23 @@ import javax.servlet.http.HttpServletResponse;
 public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   public static final String DEFAULT_ENDPOINT = "https://accounts.google.com/o/oauth2/auth";
-  public static final String DEFAULT_OAUTH_AUTHETICATION_REDIRECT = "/j_oauth_check";
+  public static final String DEFAULT_OAUTH_CALLBACK_PATH = "/j_oauth_callback";
   private static final String ENDPOINT_PROPERTY_NAME = "oauth.endpoint";
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
   private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
-  private static final String REDIRECTURI_PROPERTY_NAME = "oauth.redirect_uri";
+  private static final String CALLBACK_URI_PROPERTY_NAME = "oauth.callback_uri";
   private static Logger LOGGER = Logger.getLogger(GoogleOAuthServerAuthModule.class.getName());
   protected static final Class[] SUPPORTED_MESSAGE_TYPES = new Class[]{
     javax.servlet.http.HttpServletRequest.class,
     javax.servlet.http.HttpServletResponse.class};
-  private MessagePolicy requestPolicy;
-  private MessagePolicy responsePolicy;
   private CallbackHandler handler;
-  private Map<String, String> options;
   //properties
-  private String endpoint;
   private String clientid;
   private String clientSecret;
-  private String oauthAuthenticationRedirect;
+  private String endpoint;
+  private String oauthAuthenticationCallbackUri;
 
-  String retrieveProperty(final Map<String, String> properties, final String name, final String defaultValue) {
+  String retrieveOptionalProperty(final Map<String, String> properties, final String name, final String defaultValue) {
     if (properties.containsKey(name)) {
       return properties.get(name);
     } else {
@@ -61,23 +58,23 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
   }
 
+  String retrieveRequiredProperty(final Map<String, String> properties, final String name) throws AuthException {
+    if (properties.containsKey(name)) {
+      return properties.get(name);
+    } else {
+      final String message = String.format("Required field '%s' not specified!", name);
+      throw new AuthException(message);
+    }
+  }
+
   @Override
   public void initialize(MessagePolicy requestPolicy, MessagePolicy responsePolicy, CallbackHandler handler, Map options) throws AuthException {
-    this.requestPolicy = requestPolicy;
-    this.responsePolicy = responsePolicy;
     this.handler = handler;
-    this.options = options;
     //properties
-    this.endpoint = retrieveProperty(options, ENDPOINT_PROPERTY_NAME, DEFAULT_ENDPOINT);
-    this.clientid = retrieveProperty(options, CLIENTID_PROPERTY_NAME, null);
-    this.clientSecret = retrieveProperty(options, CLIENTSECRET_PROPERTY_NAME, null);
-    this.oauthAuthenticationRedirect = retrieveProperty(options, REDIRECTURI_PROPERTY_NAME, DEFAULT_OAUTH_AUTHETICATION_REDIRECT);
-    if (this.clientid == null) {
-      throw new AuthException("Required field \"" + CLIENTID_PROPERTY_NAME + "\" not specified!");
-    }
-    if (this.clientSecret == null) {
-      throw new AuthException("Required field \"" + CLIENTSECRET_PROPERTY_NAME + "\" not specified!");
-    }
+    this.clientid = retrieveRequiredProperty(options, CLIENTID_PROPERTY_NAME);
+    this.clientSecret = retrieveRequiredProperty(options, CLIENTSECRET_PROPERTY_NAME);
+    this.endpoint = retrieveOptionalProperty(options, ENDPOINT_PROPERTY_NAME, DEFAULT_ENDPOINT);
+    this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
   }
 
   @Override
@@ -124,7 +121,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   }
 
   boolean isOauthResponse(final HttpServletRequest request) {
-    return request.getRequestURI().contains(oauthAuthenticationRedirect);//FIXME needs better check
+    return request.getRequestURI().contains(oauthAuthenticationCallbackUri);//FIXME needs better check
   }
 
   String buildRedirectUri(final HttpServletRequest request) {
@@ -132,7 +129,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     final String serverUserInfo = null;
     final String serverHost = request.getServerName();
     final int serverPort = request.getServerPort();
-    final String path = request.getContextPath() + oauthAuthenticationRedirect;
+    final String path = request.getContextPath() + oauthAuthenticationCallbackUri;
     final String query = null;
     final String serverFragment = null;
     try {
