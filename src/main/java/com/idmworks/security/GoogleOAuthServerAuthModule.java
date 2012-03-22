@@ -1,19 +1,14 @@
 package com.idmworks.security;
 
+import com.idmworks.security.google.GoogleApiUtils;
 import com.idmworks.security.google.api.GoogleOAuthPrincipal;
 import com.idmworks.security.google.api.GoogleUserInfo;
-import com.idmworks.security.google.ParseUtils;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.net.ssl.HttpsURLConnection;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -98,10 +93,10 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         return AuthStatus.FAILURE;
       } else {
         final String redirectUri = buildRedirectUri(request);
-        final AccessTokenInfo accessTokenInfo = lookupAccessTokeInfo(redirectUri, authorizationCode);
+        final AccessTokenInfo accessTokenInfo = GoogleApiUtils.lookupAccessTokeInfo(redirectUri, authorizationCode, clientid, clientSecret);
         LOGGER.log(Level.SEVERE, "Access Token: {0}", new Object[]{accessTokenInfo});
 
-        final GoogleUserInfo googleUserInfo = retrieveGoogleUserInfo(accessTokenInfo);
+        final GoogleUserInfo googleUserInfo = GoogleApiUtils.retrieveGoogleUserInfo(accessTokenInfo);
 
         setCallerPrincipal(clientSubject, googleUserInfo);
         return AuthStatus.SUCCESS;
@@ -110,7 +105,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       return AuthStatus.SUCCESS;
     } else {
       final String redirectUri = buildRedirectUri(request);
-      final String oauthUrl = buildOauthUrl(redirectUri);
+      final String oauthUrl = GoogleApiUtils.buildOauthUrl(redirectUri, endpoint, clientid);
       try {
         LOGGER.log(Level.FINE, "redirecting to {0} for OAuth", new Object[]{oauthUrl});
         response.sendRedirect(oauthUrl);
@@ -137,111 +132,6 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       return new URI(serverScheme, serverUserInfo, serverHost, serverPort, path, query, serverFragment).toString();
     } catch (URISyntaxException ex) {
       throw new IllegalStateException("Unable to build redirectUri", ex);
-    }
-  }
-
-  String buildOauthUrl(final String redirectUri) {
-
-
-    final StringBuilder sb = new StringBuilder(endpoint);
-    sb.append("?");
-    sb.append("scope").append("=").append("https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile");
-    sb.append("&");
-    sb.append("redirect_uri").append("=").append(redirectUri);
-    sb.append("&");
-    sb.append("response_type").append("=").append("code");
-    sb.append("&");
-    sb.append("client_id").append("=").append(clientid);
-    return sb.toString();
-  }
-
-  AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode) {
-    //FIXME don't duplicate code
-    HttpsURLConnection httpsURLConnection;
-
-    try {
-      final URL url = new URL("https://accounts.google.com/o/oauth2/token");
-      httpsURLConnection = (HttpsURLConnection) url.openConnection();
-      httpsURLConnection.setRequestMethod("POST");
-      httpsURLConnection.setDoOutput(true);
-      httpsURLConnection.connect();
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to connect to google api", ex);
-    }
-
-    try {
-      final OutputStreamWriter out = new OutputStreamWriter(
-              httpsURLConnection.getOutputStream());
-
-      final StringBuilder sb = new StringBuilder();
-
-      sb.append("code").append("=").append(authorizationCode);
-      sb.append("&");
-      sb.append("client_id").append("=").append(clientid);
-      sb.append("&");
-      sb.append("client_secret").append("=").append(clientSecret);
-      sb.append("&");
-      sb.append("redirect_uri").append("=").append(redirectUri);
-      sb.append("&");
-      sb.append("grant_type").append("=").append("authorization_code");
-      LOGGER.severe(sb.toString());
-      out.write(sb.toString());
-      out.flush();
-      out.close();
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to POST body", ex);
-    }
-
-    try {
-      LOGGER.severe("response code: " + httpsURLConnection.getResponseCode());
-      if (httpsURLConnection.getResponseCode() == 200) {
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
-        final StringBuilder stringBuilder = new StringBuilder();
-        String line = null;
-        while ((line = reader.readLine()) != null) {
-          stringBuilder.append(line).append("\n");
-        }
-        reader.close();
-        return ParseUtils.parseAccessTokenJson(stringBuilder.toString());
-      } else {
-        return null;//FIXME handle this better
-      }
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to read response", ex);
-    }
-
-  }
-
-  GoogleUserInfo retrieveGoogleUserInfo(AccessTokenInfo accessTokenInfo) {
-    //FIXME don't duplicate code
-    HttpsURLConnection httpsURLConnection;
-
-    try {
-      final URL url = new URL("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + accessTokenInfo.getAccessToken());
-      httpsURLConnection = (HttpsURLConnection) url.openConnection();
-      httpsURLConnection.setRequestMethod("GET");
-      httpsURLConnection.setDoOutput(false);
-      httpsURLConnection.connect();
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to connect to google api", ex);
-    }
-
-    try {
-      LOGGER.severe("response code: " + httpsURLConnection.getResponseCode());
-      if (httpsURLConnection.getResponseCode() == 200) {
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
-        final StringBuilder stringBuilder = new StringBuilder();
-        String line = null;
-        while ((line = reader.readLine()) != null) {
-          stringBuilder.append(line).append("\n");
-        }
-        reader.close();
-        return ParseUtils.parseGoogleUserInfoJson(stringBuilder.toString());
-      } else {
-        return null;//FIXME handle this better
-      }
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to read response", ex);
     }
   }
 
