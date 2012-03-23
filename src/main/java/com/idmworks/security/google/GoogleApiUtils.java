@@ -4,10 +4,9 @@ import com.idmworks.security.google.api.GoogleUserInfo;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.HttpsURLConnection;
@@ -87,93 +86,128 @@ public class GoogleApiUtils {
     }
   }
 
-  public static AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode, String clientid, String clientSecret) {
-    //FIXME don't duplicate code
+  static Response sendRequest(final String method, final URI destination, final String body) {
+    if (LOGGER.isLoggable(Level.FINER)) {
+      LOGGER.log(Level.FINER, "sendRequest({0},{1},{2})", new Object[]{method, destination, "hasBody?" + body != null});
+    }
+
     HttpsURLConnection httpsURLConnection;
 
     try {
-      final URL url = new URL(TOKEN_API_URI);
-      httpsURLConnection = (HttpsURLConnection) url.openConnection();
-      httpsURLConnection.setRequestMethod("POST");
-      httpsURLConnection.setDoOutput(true);
+      httpsURLConnection = (HttpsURLConnection) destination.toURL().openConnection();
+      httpsURLConnection.setRequestMethod(method);
+      if (body != null) {
+        httpsURLConnection.setDoOutput(true);
+      }
       httpsURLConnection.connect();
     } catch (IOException ex) {
-      throw new IllegalStateException("Unable to connect to google api", ex);
+      throw new IllegalStateException("Unable to create connection", ex);
     }
-
-    try {
-      final OutputStreamWriter out = new OutputStreamWriter(
-              httpsURLConnection.getOutputStream());
-
-      final StringBuilder sb = new StringBuilder();
-
-      sb.append(TOKEN_API_CODE_PARAMETER).append("=").append(authorizationCode);
-      sb.append("&");
-      sb.append(TOKEN_API_CLIENT_ID_PARAMETER).append("=").append(clientid);
-      sb.append("&");
-      sb.append(TOKEN_API_CLIENT_SECRET_PARAMETER).append("=").append(clientSecret);
-      sb.append("&");
-      sb.append(TOKEN_API_REDIRECT_URI_PARAMETER).append("=").append(redirectUri);
-      sb.append("&");
-      sb.append(TOKEN_API_GRANT_TYPE_PARAMETER).append("=").append(TOKEN_API_AUTHORIZATION_CODE_VALUE);
-      LOGGER.severe(sb.toString());
-      out.write(sb.toString());
-      out.flush();
-      out.close();
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to POST body", ex);
-    }
-
-    try {
-      LOGGER.log(Level.FINE, "response code: {0}", new Object[]{httpsURLConnection.getResponseCode()});
-      if (httpsURLConnection.getResponseCode() == 200) {
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
-        final StringBuilder stringBuilder = new StringBuilder();
-        String line = null;
-        while ((line = reader.readLine()) != null) {
-          stringBuilder.append(line).append("\n");
-        }
-        reader.close();
-        return ParseUtils.parseAccessTokenJson(stringBuilder.toString());
-      } else {
-        return null;//FIXME handle this better
+    if (body
+            != null) {
+      try {
+        final OutputStream out = httpsURLConnection.getOutputStream();
+        LOGGER.log(Level.FINER, "body: {0}", new Object[]{body});
+        out.write(body.getBytes());
+        out.flush();
+        out.close();
+      } catch (IOException ex) {
+        throw new IllegalStateException("Unable to write body", ex);
       }
+    }
+
+
+    try {
+      final int status = httpsURLConnection.getResponseCode();
+      LOGGER.log(Level.FINER, "response code: {0}", new Object[]{status});
+
+      final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
+      final StringBuilder stringBuilder = new StringBuilder();
+      String line = null;
+      while ((line = reader.readLine()) != null) {
+        stringBuilder.append(line).append("\n");
+      }
+      reader.close();
+
+      return new Response(status, stringBuilder.toString());
     } catch (IOException ex) {
       throw new IllegalStateException("Unable to read response", ex);
     }
+  }
 
+  static class Response {
+
+    private final int status;
+    private final String body;
+
+    public Response(int status, String body) {
+      this.status = status;
+      this.body = body;
+    }
+
+    public String getBody() {
+      return body;
+    }
+
+    public int getStatus() {
+      return status;
+    }
+  }
+
+  static Response GET(final URI destination) {
+    return sendRequest("GET", destination, null);
+  }
+
+  static Response POST(final URI destination, final String body) {
+    return sendRequest("POST", destination, body);
+  }
+
+  public static AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode, String clientid, String clientSecret) {
+    //FIXME cache URI
+    final URI apiUri;
+    try {
+      apiUri = new URI(TOKEN_API_URI);
+    } catch (URISyntaxException ex) {
+      throw new IllegalStateException("unable to create uri for " + TOKEN_API_URI, ex);
+    }
+
+    final StringBuilder bodySb = new StringBuilder();
+    bodySb.append(TOKEN_API_CODE_PARAMETER).append("=").append(authorizationCode);
+    bodySb.append("&");
+    bodySb.append(TOKEN_API_CLIENT_ID_PARAMETER).append("=").append(clientid);
+    bodySb.append("&");
+    bodySb.append(TOKEN_API_CLIENT_SECRET_PARAMETER).append("=").append(clientSecret);
+    bodySb.append("&");
+    bodySb.append(TOKEN_API_REDIRECT_URI_PARAMETER).append("=").append(redirectUri);
+    bodySb.append("&");
+    bodySb.append(TOKEN_API_GRANT_TYPE_PARAMETER).append("=").append(TOKEN_API_AUTHORIZATION_CODE_VALUE);
+    LOGGER.severe(bodySb.toString());
+
+    final Response response = POST(apiUri, bodySb.toString());
+
+    if (response.getStatus() == 200) {
+      return ParseUtils.parseAccessTokenJson(response.getBody());
+    } else {
+      return null;//FIXME handle this better
+    }
   }
 
   public static GoogleUserInfo retrieveGoogleUserInfo(AccessTokenInfo accessTokenInfo) {
-    //FIXME don't duplicate code
-    HttpsURLConnection httpsURLConnection;
 
+    final URI apiUri;
     try {
-      final URL url = new URL(new StringBuilder(USERINFO_API_URI).append("?").append(TOKEN_API_ACCESS_TYPE_PARAMETER).append("=").append(accessTokenInfo.getAccessToken()).toString());
-      httpsURLConnection = (HttpsURLConnection) url.openConnection();
-      httpsURLConnection.setRequestMethod("GET");
-      httpsURLConnection.setDoOutput(false);
-      httpsURLConnection.connect();
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to connect to google api", ex);
+      apiUri = new URI(new StringBuilder(USERINFO_API_URI).append("?").append(TOKEN_API_ACCESS_TOKEN_PARAMETER).append("=").append(accessTokenInfo.getAccessToken()).toString());
+    } catch (URISyntaxException ex) {
+      throw new IllegalStateException("unable to create uri for " + USERINFO_API_URI, ex);
     }
 
-    try {
-      LOGGER.log(Level.FINE, "response code: {0}", new Object[]{httpsURLConnection.getResponseCode()});
-      if (httpsURLConnection.getResponseCode() == 200) {
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
-        final StringBuilder stringBuilder = new StringBuilder();
-        String line = null;
-        while ((line = reader.readLine()) != null) {
-          stringBuilder.append(line).append("\n");
-        }
-        reader.close();
-        return ParseUtils.parseGoogleUserInfoJson(stringBuilder.toString());
-      } else {
-        return null;//FIXME handle this better
-      }
-    } catch (IOException ex) {
-      throw new IllegalStateException("Unable to read response", ex);
+    final Response response = GET(apiUri);
+
+    if (response.getStatus() == 200) {
+      return ParseUtils.parseGoogleUserInfoJson(response.getBody());
+    } else {
+      return null;//FIXME handle this better
     }
+
   }
 }
