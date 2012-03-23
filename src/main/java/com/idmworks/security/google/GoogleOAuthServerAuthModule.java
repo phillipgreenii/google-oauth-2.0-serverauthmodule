@@ -104,12 +104,14 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
     final HttpServletRequest request = (HttpServletRequest) messageInfo.getRequestMessage();
     final HttpServletResponse response = (HttpServletResponse) messageInfo.getResponseMessage();
+    final StateHelper stateHelper = new StateHelper(request);
 
     if (isOauthResponse(request)) {
       final String authorizationCode = request.getParameter(GoogleApiUtils.TOKEN_API_CODE_PARAMETER);
       final String error = request.getParameter(GoogleApiUtils.TOKEN_API_ERROR_PARAMETER);
       if (error != null && !error.isEmpty()) {
         LOGGER.log(Level.WARNING, "Error authorizing: {0}", new Object[]{error});
+        //FIXME add an error page configuration  and return SEND_FAILURE (how do you use FAILURE?  it returns blank page)
         return AuthStatus.FAILURE;
       } else {
         final String redirectUri = buildRedirectUri(request);
@@ -122,21 +124,41 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         } else {
           setCallerPrincipal(clientSubject, googleUserInfo);
           messageInfo.getMap().put(AUTH_TYPE_INFO_KEY, AUTH_TYPE_GOOGLE_OAUTH_KEY);
-          return AuthStatus.SUCCESS;
+          stateHelper.saveSubject(clientSubject);
+
+          final URI orignalRequestUri = stateHelper.extractOriginalRequestPath();
+          if (orignalRequestUri != null) {
+            try {
+              LOGGER.log(Level.FINE, "redirecting to original request path: {0}", orignalRequestUri);
+              response.sendRedirect(orignalRequestUri.toString());
+            } catch (IOException ex) {
+              throw new IllegalStateException("Unable to redirect to " + orignalRequestUri, ex);
+            }
+
+          }
+          return AuthStatus.SEND_CONTINUE;
         }
       }
     } else if (!isMandatory(messageInfo)) {
       return AuthStatus.SUCCESS;
     } else {
-      final String redirectUri = buildRedirectUri(request);
-      final URI oauthUri = GoogleApiUtils.buildOauthUri(redirectUri, endpoint, clientid);
-      try {
-        LOGGER.log(Level.FINE, "redirecting to {0} for OAuth", new Object[]{oauthUri});
-        response.sendRedirect(oauthUri.toString());
-      } catch (IOException ex) {
-        throw new IllegalStateException("Unable to redirect to " + oauthUri, ex);
+      final Subject savedSubject = stateHelper.retrieveSavedSubject();
+      if (savedSubject != null) {
+        LOGGER.log(Level.FINE, "Applying saved subject: {0}", savedSubject);
+        applySubject(savedSubject, clientSubject);
+        return AuthStatus.SUCCESS;
+      } else {
+        stateHelper.saveOriginalRequestPath();
+        final String redirectUri = buildRedirectUri(request);
+        final URI oauthUri = GoogleApiUtils.buildOauthUri(redirectUri, endpoint, clientid);
+        try {
+          LOGGER.log(Level.FINE, "redirecting to {0} for OAuth", new Object[]{oauthUri});
+          response.sendRedirect(oauthUri.toString());
+        } catch (IOException ex) {
+          throw new IllegalStateException("Unable to redirect to " + oauthUri, ex);
+        }
+        return AuthStatus.SEND_CONTINUE;
       }
-      return AuthStatus.SEND_CONTINUE;
     }
   }
 
@@ -171,6 +193,13 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
 
     return true;
+  }
+
+  static void applySubject(final Subject source, Subject destination) {
+    destination.getPrincipals().addAll(
+            source.getPrincipals());
+    destination.getPublicCredentials().addAll(source.getPublicCredentials());
+    destination.getPrivateCredentials().addAll(source.getPrivateCredentials());
   }
 
   static boolean isMandatory(MessageInfo messageInfo) {
