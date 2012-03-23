@@ -78,6 +78,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       throw aex;
     }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
+    LOGGER.log(Level.FINE, "{0} initialized", new Object[]{GoogleOAuthServerAuthModule.class.getSimpleName()});
   }
 
   @Override
@@ -87,6 +88,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   @Override
   public AuthStatus validateRequest(MessageInfo messageInfo, Subject clientSubject, Subject serviceSubject) throws AuthException {
+    LOGGER.log(Level.FINER, "validateRequest({0}, {1}, {2})", new Object[]{messageInfo, clientSubject, serviceSubject});
 
     final HttpServletRequest request = (HttpServletRequest) messageInfo.getRequestMessage();
     final HttpServletResponse response = (HttpServletResponse) messageInfo.getResponseMessage();
@@ -103,9 +105,12 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         LOGGER.log(Level.FINE, "Access Token: {0}", new Object[]{accessTokenInfo});
 
         final GoogleUserInfo googleUserInfo = GoogleApiUtils.retrieveGoogleUserInfo(accessTokenInfo);
-
-        setCallerPrincipal(clientSubject, googleUserInfo);
-        return AuthStatus.SUCCESS;
+        if (googleUserInfo == null) {
+          return AuthStatus.SEND_FAILURE;
+        } else {
+          setCallerPrincipal(clientSubject, googleUserInfo);
+          return AuthStatus.SUCCESS;
+        }
       }
     } else if (!isMandatory(messageInfo)) {
       return AuthStatus.SUCCESS;
