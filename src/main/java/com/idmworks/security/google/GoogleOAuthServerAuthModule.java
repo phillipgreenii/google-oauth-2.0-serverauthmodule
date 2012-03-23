@@ -28,7 +28,19 @@ import javax.servlet.http.HttpServletResponse;
  */
 public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
+  /*
+   * SAM Constants
+   */
+  private static final String IS_MANDATORY_INFO_KEY = "javax.security.auth.message.MessagePolicy.isMandatory";
+  private static final String AUTH_TYPE_INFO_KEY = "javax.servlet.http.authType";
+  private static final String AUTH_TYPE_GOOGLE_OAUTH_KEY = "Google-OAuth";
+  /*
+   * defaults
+   */
   public static final String DEFAULT_OAUTH_CALLBACK_PATH = "/j_oauth_callback";
+  /*
+   * property names
+   */
   private static final String ENDPOINT_PROPERTY_NAME = "oauth.endpoint";
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
   private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
@@ -109,6 +121,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
           return AuthStatus.SEND_FAILURE;
         } else {
           setCallerPrincipal(clientSubject, googleUserInfo);
+          messageInfo.getMap().put(AUTH_TYPE_INFO_KEY, AUTH_TYPE_GOOGLE_OAUTH_KEY);
           return AuthStatus.SUCCESS;
         }
       }
@@ -161,8 +174,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   }
 
   static boolean isMandatory(MessageInfo messageInfo) {
-    return Boolean.valueOf((String) messageInfo.getMap().get(
-            "javax.security.auth.message.MessagePolicy.isMandatory"));//FIXME don't hardcode string
+    return Boolean.valueOf((String) messageInfo.getMap().get(IS_MANDATORY_INFO_KEY));
   }
 
   @Override
@@ -174,6 +186,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   @Override
   public void cleanSubject(MessageInfo messageInfo, Subject subject) throws AuthException {
     //TODO do i need to check messageInfo so that i only remove the specific GoogleOAuthPrincipal instance?
+    //TODO remove groups?
     subject.getPrincipals().removeAll(subject.getPrincipals(GoogleOAuthPrincipal.class));
   }
 }
