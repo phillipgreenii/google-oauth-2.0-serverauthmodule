@@ -1,6 +1,5 @@
 package com.idmworks.security.google;
 
-import com.idmworks.security.AccessTokenInfo;
 import com.idmworks.security.google.api.GoogleUserInfo;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,6 +23,7 @@ public class GoogleApiUtils {
   /*
    * User Info API
    */
+
   public static final String USERINFO_API_PERMISSION_EMAIL = "https://www.googleapis.com/auth/userinfo.email";
   public static final String USERINFO_API_PERMISSION_PROFILE = "https://www.googleapis.com/auth/userinfo.profile";
   public static final String USERINFO_API_URI = "https://www.googleapis.com/oauth2/v1/userinfo";

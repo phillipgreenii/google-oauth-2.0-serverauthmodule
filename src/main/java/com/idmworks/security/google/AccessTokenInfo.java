@@ -1,4 +1,4 @@
-package com.idmworks.security;
+package com.idmworks.security.google;
 
 import java.util.Date;
 

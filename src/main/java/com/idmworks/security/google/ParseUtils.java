@@ -1,6 +1,5 @@
 package com.idmworks.security.google;
 
-import com.idmworks.security.AccessTokenInfo;
 import com.idmworks.security.google.api.GoogleUserInfo;
 import java.util.Date;
 import java.util.HashMap;

@@ -1,6 +1,5 @@
-package com.idmworks.security;
+package com.idmworks.security.google;
 
-import com.idmworks.security.google.GoogleApiUtils;
 import com.idmworks.security.google.api.GoogleOAuthPrincipal;
 import com.idmworks.security.google.api.GoogleUserInfo;
 import java.io.IOException;
