@@ -29,7 +29,6 @@ import javax.servlet.http.HttpServletResponse;
  */
 public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
-  public static final String DEFAULT_ENDPOINT = "https://accounts.google.com/o/oauth2/auth";
   public static final String DEFAULT_OAUTH_CALLBACK_PATH = "/j_oauth_callback";
   private static final String ENDPOINT_PROPERTY_NAME = "oauth.endpoint";
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
@@ -69,7 +68,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     //properties
     this.clientid = retrieveRequiredProperty(options, CLIENTID_PROPERTY_NAME);
     this.clientSecret = retrieveRequiredProperty(options, CLIENTSECRET_PROPERTY_NAME);
-    this.endpoint = retrieveOptionalProperty(options, ENDPOINT_PROPERTY_NAME, DEFAULT_ENDPOINT);
+    this.endpoint = retrieveOptionalProperty(options, ENDPOINT_PROPERTY_NAME, GoogleApiUtils.TOKEN_API_URI_DEFAULT_ENDPOINT);
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
   }
 
@@ -86,15 +85,15 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     final HttpServletResponse response = (HttpServletResponse) messageInfo.getResponseMessage();
 
     if (isOauthResponse(request)) {
-      final String authorizationCode = request.getParameter("code");//FIXME don't hardcode parameter name
-      final String error = request.getParameter("error");//FIXME don't hardcode parameter name
+      final String authorizationCode = request.getParameter(GoogleApiUtils.TOKEN_API_CODE_PARAMETER);
+      final String error = request.getParameter(GoogleApiUtils.TOKEN_API_ERROR_PARAMETER);
       if (error != null && !error.isEmpty()) {
         LOGGER.log(Level.WARNING, "Error authorizing: {0}", new Object[]{error});
         return AuthStatus.FAILURE;
       } else {
         final String redirectUri = buildRedirectUri(request);
         final AccessTokenInfo accessTokenInfo = GoogleApiUtils.lookupAccessTokeInfo(redirectUri, authorizationCode, clientid, clientSecret);
-        LOGGER.log(Level.SEVERE, "Access Token: {0}", new Object[]{accessTokenInfo});
+        LOGGER.log(Level.FINE, "Access Token: {0}", new Object[]{accessTokenInfo});
 
         final GoogleUserInfo googleUserInfo = GoogleApiUtils.retrieveGoogleUserInfo(accessTokenInfo);
 
