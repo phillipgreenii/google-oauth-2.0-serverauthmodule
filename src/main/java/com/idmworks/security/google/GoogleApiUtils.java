@@ -121,15 +121,21 @@ public class GoogleApiUtils {
       final int status = httpsURLConnection.getResponseCode();
       LOGGER.log(Level.FINER, "response code: {0}", new Object[]{status});
 
-      final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
-      final StringBuilder stringBuilder = new StringBuilder();
-      String line = null;
-      while ((line = reader.readLine()) != null) {
-        stringBuilder.append(line).append("\n");
+      final String responseBody;
+      if (status < 400) {
+        final BufferedReader reader = new BufferedReader(new InputStreamReader(httpsURLConnection.getInputStream()));
+        final StringBuilder stringBuilder = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+          stringBuilder.append(line).append("\n");
+        }
+        reader.close();
+        responseBody = stringBuilder.toString();
+      } else {
+        responseBody = null;
       }
-      reader.close();
 
-      return new Response(status, stringBuilder.toString());
+      return new Response(status, responseBody);
     } catch (IOException ex) {
       throw new IllegalStateException("Unable to read response", ex);
     }
@@ -162,7 +168,7 @@ public class GoogleApiUtils {
     return sendRequest("POST", destination, body);
   }
 
-  public static AccessTokenInfo lookupAccessTokeInfo(String redirectUri, String authorizationCode, String clientid, String clientSecret) {
+  public static AccessTokenInfo lookupAccessTokenInfo(String redirectUri, String authorizationCode, String clientid, String clientSecret) {
     //FIXME cache URI
     final URI apiUri;
     try {
@@ -181,7 +187,7 @@ public class GoogleApiUtils {
     bodySb.append(TOKEN_API_REDIRECT_URI_PARAMETER).append("=").append(redirectUri);
     bodySb.append("&");
     bodySb.append(TOKEN_API_GRANT_TYPE_PARAMETER).append("=").append(TOKEN_API_AUTHORIZATION_CODE_VALUE);
-    LOGGER.severe(bodySb.toString());
+    LOGGER.log(Level.FINE, "Lookup Acess Token body: {0}", bodySb);
 
     final Response response = POST(apiUri, bodySb.toString());
 

@@ -113,7 +113,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         return AuthStatus.FAILURE;
       } else {
         final String redirectUri = buildRedirectUri(request);
-        final AccessTokenInfo accessTokenInfo = GoogleApiUtils.lookupAccessTokeInfo(redirectUri, authorizationCode, clientid, clientSecret);
+        final AccessTokenInfo accessTokenInfo = GoogleApiUtils.lookupAccessTokenInfo(redirectUri, authorizationCode, clientid, clientSecret);
         LOGGER.log(Level.FINE, "Access Token: {0}", new Object[]{accessTokenInfo});
 
         final GoogleUserInfo googleUserInfo = GoogleApiUtils.retrieveGoogleUserInfo(accessTokenInfo);
@@ -179,7 +179,6 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   @Override
   public AuthStatus secureResponse(MessageInfo messageInfo, Subject serviceSubject) throws AuthException {
-    //TODO what needs to happen here?
     return AuthStatus.SEND_SUCCESS;
   }
 
