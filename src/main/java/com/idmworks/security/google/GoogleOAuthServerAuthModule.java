@@ -41,7 +41,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   //properties
   private String clientid;
   private String clientSecret;
-  private String endpoint;
+  private URI endpoint;
   private String oauthAuthenticationCallbackUri;
 
   String retrieveOptionalProperty(final Map<String, String> properties, final String name, final String defaultValue) {
@@ -57,6 +57,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       return properties.get(name);
     } else {
       final String message = String.format("Required field '%s' not specified!", name);
+      LOGGER.log(Level.SEVERE, message);
       throw new AuthException(message);
     }
   }
@@ -67,7 +68,15 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     //properties
     this.clientid = retrieveRequiredProperty(options, CLIENTID_PROPERTY_NAME);
     this.clientSecret = retrieveRequiredProperty(options, CLIENTSECRET_PROPERTY_NAME);
-    this.endpoint = retrieveOptionalProperty(options, ENDPOINT_PROPERTY_NAME, GoogleApiUtils.TOKEN_API_URI_DEFAULT_ENDPOINT);
+    try {
+      this.endpoint = new URI(retrieveOptionalProperty(options, ENDPOINT_PROPERTY_NAME, GoogleApiUtils.TOKEN_API_URI_DEFAULT_ENDPOINT));
+    } catch (URISyntaxException ex) {
+      final String message = String.format("Invalid field '%s'", ENDPOINT_PROPERTY_NAME);
+      LOGGER.log(Level.SEVERE, message, ex);
+      final AuthException aex = new AuthException(message);
+      aex.initCause(ex);
+      throw aex;
+    }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
   }
 
@@ -78,7 +87,6 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   @Override
   public AuthStatus validateRequest(MessageInfo messageInfo, Subject clientSubject, Subject serviceSubject) throws AuthException {
-
 
     final HttpServletRequest request = (HttpServletRequest) messageInfo.getRequestMessage();
     final HttpServletResponse response = (HttpServletResponse) messageInfo.getResponseMessage();

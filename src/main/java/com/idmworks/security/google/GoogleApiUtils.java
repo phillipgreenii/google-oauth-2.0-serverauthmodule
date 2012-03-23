@@ -68,19 +68,20 @@ public class GoogleApiUtils {
   public static final String TOKEN_API_AUTHORIZATION_CODE_VALUE = "authorization_code";
   private static final Logger LOGGER = Logger.getLogger(GoogleApiUtils.class.getName());
 
-  public static URI buildOauthUri(final String redirectUri, final String endpoint, final String clientid) {
+  public static URI buildOauthUri(final String redirectUri, final URI endpoint, final String clientid) {
 
-    final StringBuilder sb = new StringBuilder(endpoint);
-    sb.append("?");
-    sb.append(TOKEN_API_SCOPE_PARAMETER).append("=").append(USERINFO_API_PERMISSION_EMAIL).append(" ").append(USERINFO_API_PERMISSION_PROFILE);
-    sb.append("&");
-    sb.append(TOKEN_API_REDIRECT_URI_PARAMETER).append("=").append(redirectUri);
-    sb.append("&");
-    sb.append(TOKEN_API_RESPONSE_TYPE_PARAMETER).append("=").append(TOKEN_API_CODE_PARAMETER);
-    sb.append("&");
-    sb.append(TOKEN_API_CLIENT_ID_PARAMETER).append("=").append(clientid);
+    final StringBuilder querySb = new StringBuilder();
+    querySb.append(TOKEN_API_SCOPE_PARAMETER).append("=").append(USERINFO_API_PERMISSION_EMAIL).append(" ").append(USERINFO_API_PERMISSION_PROFILE);
+    querySb.append("&");
+    querySb.append(TOKEN_API_REDIRECT_URI_PARAMETER).append("=").append(redirectUri);
+    querySb.append("&");
+    querySb.append(TOKEN_API_RESPONSE_TYPE_PARAMETER).append("=").append(TOKEN_API_CODE_PARAMETER);
+    querySb.append("&");
+    querySb.append(TOKEN_API_CLIENT_ID_PARAMETER).append("=").append(clientid);
+
+    final String totalQuery = endpoint.getQuery() == null ? querySb.toString() : endpoint.getQuery() + "&" + querySb.toString();
     try {
-      return new URI(sb.toString());
+      return new URI(endpoint.getScheme(), endpoint.getUserInfo(), endpoint.getHost(), endpoint.getPort(), endpoint.getPath(), totalQuery, endpoint.getFragment());
     } catch (URISyntaxException ex) {
       throw new IllegalArgumentException("Unable to build Oauth Uri", ex);
     }
