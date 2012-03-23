@@ -99,7 +99,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
         setCallerPrincipal(clientSubject, googleUserInfo);
         return AuthStatus.SUCCESS;
       }
-    } else if (isMandatory(messageInfo)) {
+    } else if (!isMandatory(messageInfo)) {
       return AuthStatus.SUCCESS;
     } else {
       final String redirectUri = buildRedirectUri(request);
