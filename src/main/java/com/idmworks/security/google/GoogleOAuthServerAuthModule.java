@@ -131,26 +131,31 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
       final GoogleUserInfo googleUserInfo = GoogleApiUtils.retrieveGoogleUserInfo(accessTokenInfo);
       if (googleUserInfo == null) {
+        //FIXME handle failure better
         return AuthStatus.SEND_FAILURE;
       } else {
-        final StateHelper stateHelper = new StateHelper(request);
-
-        setCallerPrincipal(clientSubject, googleUserInfo);
-        messageInfo.getMap().put(AUTH_TYPE_INFO_KEY, AUTH_TYPE_GOOGLE_OAUTH_KEY);
-        stateHelper.saveSubject(clientSubject);
-
-        final URI orignalRequestUri = stateHelper.extractOriginalRequestPath();
-        if (orignalRequestUri != null) {
-          try {
-            LOGGER.log(Level.FINE, "redirecting to original request path: {0}", orignalRequestUri);
-            response.sendRedirect(orignalRequestUri.toString());
-          } catch (IOException ex) {
-            throw new IllegalStateException("Unable to redirect to " + orignalRequestUri, ex);
-          }
-
-        }
+        authenticate(messageInfo, request, response, clientSubject, googleUserInfo);
         return AuthStatus.SEND_CONTINUE;
       }
+    }
+  }
+
+  void authenticate(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject subject, final GoogleUserInfo googleUserInfo) {
+    final StateHelper stateHelper = new StateHelper(request);
+
+    setCallerPrincipal(subject, googleUserInfo);
+    messageInfo.getMap().put(AUTH_TYPE_INFO_KEY, AUTH_TYPE_GOOGLE_OAUTH_KEY);
+    stateHelper.saveSubject(subject);
+
+    final URI orignalRequestUri = stateHelper.extractOriginalRequestPath();
+    if (orignalRequestUri != null) {
+      try {
+        LOGGER.log(Level.FINE, "redirecting to original request path: {0}", orignalRequestUri);
+        response.sendRedirect(orignalRequestUri.toString());
+      } catch (IOException ex) {
+        throw new IllegalStateException("Unable to redirect to " + orignalRequestUri, ex);
+      }
+
     }
   }
 
