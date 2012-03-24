@@ -45,6 +45,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
   private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
   private static final String CALLBACK_URI_PROPERTY_NAME = "oauth.callback_uri";
+  private static final String DEFAULT_GROUPS_PROPERTY_NAME = "default_groups";
   private static Logger LOGGER = Logger.getLogger(GoogleOAuthServerAuthModule.class.getName());
   protected static final Class[] SUPPORTED_MESSAGE_TYPES = new Class[]{
     javax.servlet.http.HttpServletRequest.class,
@@ -55,6 +56,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private String clientSecret;
   private URI endpoint;
   private String oauthAuthenticationCallbackUri;
+  private String defaultGroups;
 
   String retrieveOptionalProperty(final Map<String, String> properties, final String name, final String defaultValue) {
     if (properties.containsKey(name)) {
@@ -90,6 +92,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       throw aex;
     }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
+    this.defaultGroups = retrieveOptionalProperty(options, DEFAULT_GROUPS_PROPERTY_NAME, "");
     LOGGER.log(Level.FINE, "{0} initialized", new Object[]{GoogleOAuthServerAuthModule.class.getSimpleName()});
   }
 
@@ -195,9 +198,17 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   boolean setCallerPrincipal(Subject clientSubject, GoogleUserInfo googleUserInfo) {
     final CallerPrincipalCallback principalCallback = new CallerPrincipalCallback(
             clientSubject, new GoogleOAuthPrincipal(googleUserInfo));
-    final GroupPrincipalCallback groupCallback = new GroupPrincipalCallback(clientSubject, new String[]{"user"});
+
+    final Callback[] callbacks;
+    if (defaultGroups.isEmpty()) {
+      callbacks = new Callback[]{principalCallback};
+    } else {
+      final GroupPrincipalCallback groupCallback = new GroupPrincipalCallback(clientSubject, defaultGroups.split(","));
+      callbacks = new Callback[]{principalCallback, groupCallback};
+    }
+
     try {
-      handler.handle(new Callback[]{principalCallback, groupCallback});
+      handler.handle(callbacks);
     } catch (Exception e) {
       LOGGER.log(Level.SEVERE, "unable to set caller and groups", e);
       return false;
