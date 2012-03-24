@@ -187,7 +187,7 @@ public class GoogleApiUtils {
     bodySb.append(TOKEN_API_REDIRECT_URI_PARAMETER).append("=").append(redirectUri);
     bodySb.append("&");
     bodySb.append(TOKEN_API_GRANT_TYPE_PARAMETER).append("=").append(TOKEN_API_AUTHORIZATION_CODE_VALUE);
-    LOGGER.log(Level.FINE, "Lookup Acess Token body: {0}", bodySb);
+    LOGGER.log(Level.FINE, "Lookup Access Token body: {0}", bodySb);
 
     final Response response = POST(apiUri, bodySb.toString());
 
