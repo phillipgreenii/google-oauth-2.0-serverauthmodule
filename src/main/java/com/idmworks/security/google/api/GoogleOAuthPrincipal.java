@@ -23,4 +23,9 @@ public class GoogleOAuthPrincipal implements Principal {
   public GoogleUserInfo getGoogleUserInfo() {
     return googleUserInfo;
   }
+
+  @Override
+  public String toString() {
+    return new StringBuilder().append("{").append(GoogleOAuthPrincipal.class.getSimpleName()).append(":").append(getName()).append("}").toString();
+  }
 }
