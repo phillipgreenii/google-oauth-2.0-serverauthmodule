@@ -1,11 +1,13 @@
 package com.idmworks.security.google.api;
 
+import java.io.Serializable;
+
 /**
  * User information from google account.
  *
  * @author pdgreen
  */
-public class GoogleUserInfo {
+public class GoogleUserInfo implements Serializable {
 
   private final String id;
   private final String email;
