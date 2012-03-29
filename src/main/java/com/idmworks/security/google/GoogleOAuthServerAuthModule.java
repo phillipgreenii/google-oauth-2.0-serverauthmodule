@@ -5,12 +5,18 @@ import com.idmworks.security.google.api.GoogleUserInfo;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
 import javax.security.auth.message.AuthException;
 import javax.security.auth.message.AuthStatus;
 import javax.security.auth.message.MessageInfo;
@@ -31,6 +37,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   /*
    * SAM Constants
    */
+  private static final String LEARNING_CONTEXT_KEY = "javax.security.auth.login.LoginContext";
   private static final String IS_MANDATORY_INFO_KEY = "javax.security.auth.message.MessagePolicy.isMandatory";
   private static final String AUTH_TYPE_INFO_KEY = "javax.servlet.http.authType";
   private static final String AUTH_TYPE_GOOGLE_OAUTH_KEY = "Google-OAuth";
@@ -57,8 +64,11 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private URI endpoint;
   private String oauthAuthenticationCallbackUri;
   private String defaultGroups;
+  private GoogleOAuthCallbackHandler googleOAuthCallbackHandler;
+  private LoginContextWrapper loginContextWrapper;
 
   String retrieveOptionalProperty(final Map<String, String> properties, final String name, final String defaultValue) {
+    LOGGER.log(Level.FINER, "retrieveOptionalProperty(_,{0},_)", name);
     if (properties.containsKey(name)) {
       return properties.get(name);
     } else {
@@ -67,6 +77,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   }
 
   String retrieveRequiredProperty(final Map<String, String> properties, final String name) throws AuthException {
+    LOGGER.log(Level.FINER, "retrieveRequiredProperty(_,{0})", name);
     if (properties.containsKey(name)) {
       return properties.get(name);
     } else {
@@ -78,6 +89,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   @Override
   public void initialize(MessagePolicy requestPolicy, MessagePolicy responsePolicy, CallbackHandler handler, Map options) throws AuthException {
+    LOGGER.log(Level.FINER, "initialize()");
     this.handler = handler;
     //properties
     this.clientid = retrieveRequiredProperty(options, CLIENTID_PROPERTY_NAME);
@@ -93,7 +105,43 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
     this.defaultGroups = retrieveOptionalProperty(options, DEFAULT_GROUPS_PROPERTY_NAME, "");
+    final String learningContextName = retrieveOptionalProperty(options, LEARNING_CONTEXT_KEY, GoogleOAuthServerAuthModule.class.getName());
+    this.googleOAuthCallbackHandler = new GoogleOAuthCallbackHandler();
+    this.loginContextWrapper = new LoginContextWrapper(createLoginContext(learningContextName, googleOAuthCallbackHandler));
+
     LOGGER.log(Level.FINE, "{0} initialized", new Object[]{GoogleOAuthServerAuthModule.class.getSimpleName()});
+  }
+
+  static AuthException wrapException(final String message, final LoginException loginException) {
+    LOGGER.log(Level.FINE, "wrapException({0},{1})", new Object[]{message, loginException});
+    final AuthException authException = new AuthException(message);
+    authException.initCause(loginException);
+    return authException;
+  }
+
+  /**
+   * Creates a LoginContext. If No LoginModules configured for loginContextName, null is returned.
+   *
+   * @param loginContextName name of the LoginContext to use
+   * @param googleOAuthCallbackHandler handler to pass to loginContext
+   * @return LoginContext for loginContextName or null
+   * @throws AuthException thrown when LoginException is thrown during LoginContext creation
+   */
+  LoginContext createLoginContext(final String loginContextName, final GoogleOAuthCallbackHandler googleOAuthCallbackHandler) throws AuthException {
+    try {
+      final LoginContext createdLoginContext =
+              new LoginContext(loginContextName, googleOAuthCallbackHandler);
+      return createdLoginContext;
+    } catch (LoginException ex) {
+      if (ex.getMessage().contains("No LoginModules configured")) {
+        return null;
+      } else {
+        throw wrapException("Unable to create LoginContext", ex);
+      }
+    } catch (SecurityException ex) {
+      LOGGER.log(Level.SEVERE, "Something very bad happened!", ex);
+      throw ex;
+    }
   }
 
   @Override
@@ -117,7 +165,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
   }
 
-  AuthStatus handleOauthResponse(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject clientSubject) {
+  AuthStatus handleOauthResponse(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject clientSubject) throws AuthException {
     final String authorizationCode = request.getParameter(GoogleApiUtils.TOKEN_API_CODE_PARAMETER);
     final String error = request.getParameter(GoogleApiUtils.TOKEN_API_ERROR_PARAMETER);
     if (error != null && !error.isEmpty()) {
@@ -140,10 +188,18 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
   }
 
-  void authenticate(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject subject, final GoogleUserInfo googleUserInfo) {
+  void authenticate(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject subject, final GoogleUserInfo googleUserInfo) throws AuthException {
     final StateHelper stateHelper = new StateHelper(request);
 
-    setCallerPrincipal(subject, googleUserInfo);
+    googleOAuthCallbackHandler.setGoogleUserInfo(googleUserInfo);
+
+    final Subject lcSubject = loginWithLoginContext();
+
+    LOGGER.log(Level.FINE, "Subject from Login Context: {0}", lcSubject);
+
+    final List<String> groups = buildGroupNames(lcSubject.getPrincipals());
+
+    setCallerPrincipal(subject, googleUserInfo, groups);
     messageInfo.getMap().put(AUTH_TYPE_INFO_KEY, AUTH_TYPE_GOOGLE_OAUTH_KEY);
     stateHelper.saveSubject(subject);
 
@@ -159,7 +215,23 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
   }
 
-  AuthStatus handleMandatoryRequest(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject clientSubject) {
+  /**
+   * Calls login with the loginContext and the retrieves the subject.
+   *
+   * @return subject of a loginContext after login
+   * @throws AuthException wrapped LoginException from loginContext.login()
+   */
+  Subject loginWithLoginContext() throws AuthException {
+
+    try {
+      loginContextWrapper.login();
+      return loginContextWrapper.getSubject();
+    } catch (LoginException ex) {
+      throw wrapException("Unable to login with LoginContext", ex);
+    }
+  }
+
+  AuthStatus handleMandatoryRequest(final MessageInfo messageInfo, final HttpServletRequest request, final HttpServletResponse response, final Subject clientSubject) throws AuthException {
     final StateHelper stateHelper = new StateHelper(request);
 
     final Subject savedSubject = stateHelper.retrieveSavedSubject();
@@ -181,6 +253,28 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
   }
 
+  /**
+   * Builds a list of group names which contain any groups from defaultGroups and any principals from LoginContext
+   *
+   * @param principals principals from LoginContext
+   * @return list of groupNames for the user
+   */
+  List<String> buildGroupNames(Iterable<Principal> principals) {
+    final List<String> groups = new ArrayList<String>();
+
+    // add default groups if defined
+    if (!defaultGroups.isEmpty()) {
+      groups.addAll(Arrays.asList(defaultGroups.split(",")));
+    }
+
+    //add each principal as a group
+    for (final Principal principal : principals) {
+      groups.add(principal.getName());
+    }
+
+    return groups;
+  }
+
   boolean isOauthResponse(final HttpServletRequest request) {
     return request.getRequestURI().contains(oauthAuthenticationCallbackUri);//FIXME needs better check
   }
@@ -200,15 +294,15 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
   }
 
-  boolean setCallerPrincipal(Subject clientSubject, GoogleUserInfo googleUserInfo) {
+  boolean setCallerPrincipal(Subject clientSubject, GoogleUserInfo googleUserInfo, List<String> groups) {
     final CallerPrincipalCallback principalCallback = new CallerPrincipalCallback(
             clientSubject, new GoogleOAuthPrincipal(googleUserInfo));
 
     final Callback[] callbacks;
-    if (defaultGroups.isEmpty()) {
+    if (groups.isEmpty()) {
       callbacks = new Callback[]{principalCallback};
     } else {
-      final GroupPrincipalCallback groupCallback = new GroupPrincipalCallback(clientSubject, defaultGroups.split(","));
+      final GroupPrincipalCallback groupCallback = new GroupPrincipalCallback(clientSubject, groups.toArray(new String[0]));
       callbacks = new Callback[]{principalCallback, groupCallback};
     }
 
@@ -235,13 +329,21 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
   @Override
   public AuthStatus secureResponse(MessageInfo messageInfo, Subject serviceSubject) throws AuthException {
+    LOGGER.log(Level.FINER, "secureResponse()");
     return AuthStatus.SEND_SUCCESS;
   }
 
   @Override
   public void cleanSubject(MessageInfo messageInfo, Subject subject) throws AuthException {
-    //TODO do i need to check messageInfo so that i only remove the specific GoogleOAuthPrincipal instance?
-    //TODO remove groups?
-    subject.getPrincipals().removeAll(subject.getPrincipals(GoogleOAuthPrincipal.class));
+    subject.getPrincipals().clear();
+    subject.getPublicCredentials().clear();
+    subject.getPrivateCredentials().clear();
+
+    try {
+      loginContextWrapper.logout();
+    } catch (LoginException ex) {
+      throw wrapException("Unable to logout LoginContext", ex);
+    }
+
   }
 }
