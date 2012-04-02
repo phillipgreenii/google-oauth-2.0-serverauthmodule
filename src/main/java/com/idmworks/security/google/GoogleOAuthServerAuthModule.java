@@ -53,6 +53,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
   private static final String CALLBACK_URI_PROPERTY_NAME = "oauth.callback_uri";
   private static final String IGNORE_MISSING_LOGIN_MODULE = "ignore_missing_login_module";
+  private static final String ADD_DOMAIN_AS_GROUP = "add_domain_as_group";
   private static final String DEFAULT_GROUPS_PROPERTY_NAME = "default_groups";
   private static Logger LOGGER = Logger.getLogger(GoogleOAuthServerAuthModule.class.getName());
   protected static final Class[] SUPPORTED_MESSAGE_TYPES = new Class[]{
@@ -65,6 +66,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private URI endpoint;
   private String oauthAuthenticationCallbackUri;
   private boolean ignoreMissingLoginModule;
+  private boolean addDomainAsGroup;
   private String defaultGroups;
   private GoogleOAuthCallbackHandler googleOAuthCallbackHandler;
   private LoginContextWrapper loginContextWrapper;
@@ -107,6 +109,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
     }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
     this.ignoreMissingLoginModule = Boolean.parseBoolean(retrieveOptionalProperty(options, IGNORE_MISSING_LOGIN_MODULE, Boolean.toString(false)));
+    this.addDomainAsGroup = Boolean.parseBoolean(retrieveOptionalProperty(options, ADD_DOMAIN_AS_GROUP, Boolean.toString(false)));
     this.defaultGroups = retrieveOptionalProperty(options, DEFAULT_GROUPS_PROPERTY_NAME, "");
     final String learningContextName = retrieveOptionalProperty(options, LEARNING_CONTEXT_KEY, GoogleOAuthServerAuthModule.class.getName());
     this.googleOAuthCallbackHandler = new GoogleOAuthCallbackHandler();
@@ -200,7 +203,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
 
     LOGGER.log(Level.FINE, "Subject from Login Context: {0}", lcSubject);
 
-    final List<String> groups = buildGroupNames(lcSubject.getPrincipals());
+    final List<String> groups = buildGroupNames(googleUserInfo, lcSubject.getPrincipals());
 
     setCallerPrincipal(subject, googleUserInfo, groups);
     messageInfo.getMap().put(AUTH_TYPE_INFO_KEY, AUTH_TYPE_GOOGLE_OAUTH_KEY);
@@ -259,15 +262,22 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   /**
    * Builds a list of group names which contain any groups from defaultGroups and any principals from LoginContext
    *
+   * @param googleUserInfo user being authenticate, the domain of the email may be used for a group
    * @param principals principals from LoginContext
    * @return list of groupNames for the user
    */
-  List<String> buildGroupNames(Iterable<Principal> principals) {
+  List<String> buildGroupNames(final GoogleUserInfo googleUserInfo, final Iterable<Principal> principals) {
     final List<String> groups = new ArrayList<String>();
 
     // add default groups if defined
     if (!defaultGroups.isEmpty()) {
       groups.addAll(Arrays.asList(defaultGroups.split(",")));
+    }
+
+    // add domain of email as group
+    if (addDomainAsGroup && googleUserInfo.getEmail().contains("@")) {
+      final String domain = googleUserInfo.getEmail().split("@", 2)[1];
+      groups.add(domain);
     }
 
     //add each principal as a group
