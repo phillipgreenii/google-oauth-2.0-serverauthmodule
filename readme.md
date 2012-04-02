@@ -42,7 +42,7 @@ default: `/j_oauth_callback`
 #### `javax.security.auth.login.LoginContext` (_optional_)
 default: `"com.idmworks.security.google.GoogleOAuthServerAuthModule"`
 
-With [LoginModule Bridge Profile], `javax.security.auth.login.LoginContext` is where you define the name of the [LearningContext][javadocs-logincontext] to use.
+With [LoginModule Bridge Profile], `javax.security.auth.login.LoginContext` is where you define the name of the [LoginContext][javadocs-logincontext] to use.
 
 #### `ignore_missing_login_context` (_optional_)
 default: `"false"`
