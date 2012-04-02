@@ -52,7 +52,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
   private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
   private static final String CALLBACK_URI_PROPERTY_NAME = "oauth.callback_uri";
-  private static final String IGNORE_MISSING_LOGIN_MODULE = "ignore_missing_login_module";
+  private static final String IGNORE_MISSING_LOGIN_CONTEXT = "ignore_missing_login_context";
   private static final String ADD_DOMAIN_AS_GROUP = "add_domain_as_group";
   private static final String DEFAULT_GROUPS_PROPERTY_NAME = "default_groups";
   private static Logger LOGGER = Logger.getLogger(GoogleOAuthServerAuthModule.class.getName());
@@ -65,7 +65,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private String clientSecret;
   private URI endpoint;
   private String oauthAuthenticationCallbackUri;
-  private boolean ignoreMissingLoginModule;
+  private boolean ignoreMissingLoginContext;
   private boolean addDomainAsGroup;
   private String defaultGroups;
   private GoogleOAuthCallbackHandler googleOAuthCallbackHandler;
@@ -108,7 +108,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       throw aex;
     }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
-    this.ignoreMissingLoginModule = Boolean.parseBoolean(retrieveOptionalProperty(options, IGNORE_MISSING_LOGIN_MODULE, Boolean.toString(false)));
+    this.ignoreMissingLoginContext = Boolean.parseBoolean(retrieveOptionalProperty(options, IGNORE_MISSING_LOGIN_CONTEXT, Boolean.toString(false)));
     this.addDomainAsGroup = Boolean.parseBoolean(retrieveOptionalProperty(options, ADD_DOMAIN_AS_GROUP, Boolean.toString(false)));
     this.defaultGroups = retrieveOptionalProperty(options, DEFAULT_GROUPS_PROPERTY_NAME, "");
     final String learningContextName = retrieveOptionalProperty(options, LEARNING_CONTEXT_KEY, GoogleOAuthServerAuthModule.class.getName());
@@ -139,7 +139,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
               new LoginContext(loginContextName, googleOAuthCallbackHandler);
       return createdLoginContext;
     } catch (LoginException ex) {
-      if (ignoreMissingLoginModule && ex.getMessage().contains("No LoginModules configured")) {
+      if (ignoreMissingLoginContext && ex.getMessage().contains("No LoginModules configured")) {
         return null;
       } else {
         throw wrapException("Unable to create LoginContext", ex);
