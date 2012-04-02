@@ -142,7 +142,9 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       if (ignoreMissingLoginContext && ex.getMessage().contains("No LoginModules configured")) {
         return null;
       } else {
-        throw wrapException("Unable to create LoginContext", ex);
+        final String message = "Unable to create LoginContext";
+        LOGGER.log(Level.SEVERE, message, ex);
+        throw wrapException(message, ex);
       }
     } catch (SecurityException ex) {
       LOGGER.log(Level.SEVERE, "Something very bad happened!", ex);
