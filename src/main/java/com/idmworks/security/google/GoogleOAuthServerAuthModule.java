@@ -52,6 +52,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private static final String CLIENTID_PROPERTY_NAME = "oauth.clientid";
   private static final String CLIENTSECRET_PROPERTY_NAME = "oauth.clientsecret";
   private static final String CALLBACK_URI_PROPERTY_NAME = "oauth.callback_uri";
+  private static final String IGNORE_MISSING_LOGIN_MODULE = "ignore_missing_login_module";
   private static final String DEFAULT_GROUPS_PROPERTY_NAME = "default_groups";
   private static Logger LOGGER = Logger.getLogger(GoogleOAuthServerAuthModule.class.getName());
   protected static final Class[] SUPPORTED_MESSAGE_TYPES = new Class[]{
@@ -63,6 +64,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
   private String clientSecret;
   private URI endpoint;
   private String oauthAuthenticationCallbackUri;
+  private boolean ignoreMissingLoginModule;
   private String defaultGroups;
   private GoogleOAuthCallbackHandler googleOAuthCallbackHandler;
   private LoginContextWrapper loginContextWrapper;
@@ -104,6 +106,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
       throw aex;
     }
     this.oauthAuthenticationCallbackUri = retrieveOptionalProperty(options, CALLBACK_URI_PROPERTY_NAME, DEFAULT_OAUTH_CALLBACK_PATH);
+    this.ignoreMissingLoginModule = Boolean.parseBoolean(retrieveOptionalProperty(options, IGNORE_MISSING_LOGIN_MODULE, Boolean.toString(false)));
     this.defaultGroups = retrieveOptionalProperty(options, DEFAULT_GROUPS_PROPERTY_NAME, "");
     final String learningContextName = retrieveOptionalProperty(options, LEARNING_CONTEXT_KEY, GoogleOAuthServerAuthModule.class.getName());
     this.googleOAuthCallbackHandler = new GoogleOAuthCallbackHandler();
@@ -133,7 +136,7 @@ public class GoogleOAuthServerAuthModule implements ServerAuthModule {
               new LoginContext(loginContextName, googleOAuthCallbackHandler);
       return createdLoginContext;
     } catch (LoginException ex) {
-      if (ex.getMessage().contains("No LoginModules configured")) {
+      if (ignoreMissingLoginModule && ex.getMessage().contains("No LoginModules configured")) {
         return null;
       } else {
         throw wrapException("Unable to create LoginContext", ex);
