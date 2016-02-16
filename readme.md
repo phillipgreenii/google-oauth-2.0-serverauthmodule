@@ -47,7 +47,7 @@ With [LoginModule Bridge Profile], `javax.security.auth.login.LoginContext` is w
 #### `ignore_missing_login_context` (_optional_)
 default: `"false"`
 
-`GoogleOAuthServerAuthModule` is configured to optionally support [LoginModule Bridge Profile].  If you set `ignore_missing_login_context` to false (in the case when you don't want to use any [LoginModules][javadocs-loginmodule]), there will be no error when a LoginContext isn't found.
+`GoogleOAuthServerAuthModule` is configured by default to support the [LoginModule Bridge Profile].  If you set `ignore_missing_login_context` to true (in the case when you don't want to use any [LoginModules][javadocs-loginmodule]), there will be no error when a LoginContext isn't found.
 
 
 #### `add_domain_as_group` (_optional_)
