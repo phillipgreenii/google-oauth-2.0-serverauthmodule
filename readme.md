@@ -1,6 +1,6 @@
 Overview
 ========
-
+[![Build Status](https://travis-ci.org/phillipgreenii/google-oauth-2.0-serverauthmodule.svg?branch=master)](https://travis-ci.org/phillipgreenii/google-oauth-2.0-serverauthmodule)
 
 Google OAuth 2.0 ServerAuthModule is a ServerAuthModule (SAM), [JSR-196 (JASPIC) Spec][jsr-196], implementation of [Google OAuth 2.0][google-oauth]: `com.idmworks.security.google.GoogleOAuthServerAuthModule`.  It optionally supports the [LoginModule Bridge Profile].
 
